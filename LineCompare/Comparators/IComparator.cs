@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace LineCompare
+namespace LineCompare.Comparators
 {
     public interface IComparator
     {

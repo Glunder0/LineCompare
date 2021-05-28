@@ -1,8 +1,11 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
+using CommandLine.Text;
+using LineCompare.Comparators;
 
 namespace LineCompare
 {
@@ -10,7 +13,9 @@ namespace LineCompare
     {
         private static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<Options>(args).MapResult(Compare, _ => 1);
+            var parser = new Parser(settings => settings.HelpWriter = null);
+            var parserResult = parser.ParseArguments<Options>(args);
+            return parserResult.MapResult(Compare, _ => DisplayHelp(parserResult));
         }
 
         private static int Compare(Options options)
@@ -39,6 +44,19 @@ namespace LineCompare
 
             Console.WriteLine("No difference was found");
             return 0;
+        }
+
+        private static int DisplayHelp(ParserResult<Options> parserResult)
+        {
+            var helpText = HelpText.AutoBuild(parserResult, 
+                h =>
+                {
+                    h.AutoHelp = false;
+                    h.AddPostOptionsLines(ComparatorLibrary.GetComparatorNames().Prepend("Available file comparison methods:"));
+                    return HelpText.DefaultParsingErrorsHandler(parserResult, h);
+                }, e => e);
+            Console.Error.WriteLine(helpText);
+            return 1;
         }
 
         /// <summary>

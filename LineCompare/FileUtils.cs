@@ -21,11 +21,11 @@ namespace LineCompare
             using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileStreamBufferSize, FileOptions.SequentialScan);
             using var streamReader = new StreamReader(fileStream, FileEncoding, bufferSize: StreamReaderBufferSize);
 
-            fileOpened?.Invoke(fileStream.Length);
+            fileOpened.Invoke(fileStream.Length);
             
             while (!streamReader.EndOfStream)
             {
-                var line = streamReader.ReadLine(); // Line should not be a null if it is not a end of stream
+                var line = streamReader.ReadLine()!; // Line should not be a null if it is not a end of stream
                 lineRead?.Invoke(line, fileStream.Position);
             }
         }

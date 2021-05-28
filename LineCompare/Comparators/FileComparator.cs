@@ -2,14 +2,25 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using JetBrains.Annotations;
 
-namespace LineCompare
+namespace LineCompare.Comparators
 {
     /// <summary>
     /// Compares two files ignoring line order
     /// </summary>
     public sealed class FileComparator : IComparator
     {
+        [UsedImplicitly]
+        public class Creator : IComparatorCreator
+        {
+            public string Name => "Simple";
+            public IComparator Create(string firstFile, string secondFile)
+            {
+                return new FileComparator(firstFile, secondFile);
+            }
+        }
+        
         private readonly string _firstFilePath;
         private readonly string _secondFilePath;
         
