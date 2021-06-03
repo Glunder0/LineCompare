@@ -20,7 +20,7 @@ namespace LineCompare
         /// </summary>
         /// <param name="maxLines">Maximum amount of lines to include in the report</param>
         /// <returns></returns>
-        public string Report(int maxLines = 10)
+        public string ReducedReport(int maxLines = 10)
         {
             var stringBuilder = new StringBuilder();
 

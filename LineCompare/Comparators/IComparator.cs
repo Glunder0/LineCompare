@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace LineCompare.Comparators
@@ -9,9 +8,8 @@ namespace LineCompare.Comparators
         /// <summary>
         /// Loads and compares files
         /// </summary>
-        /// <param name="progress">Comparison progress</param>
         /// <returns></returns>
-        Task Compare(IProgress<float> progress);
+        Task Compare();
         
         /// <summary>
         /// Returns lines which is present in the second file but missing in the first file

@@ -1,8 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using CommandLine;
 using CommandLine.Text;
 using LineCompare.Comparators;
@@ -26,14 +24,12 @@ namespace LineCompare
                 return 2;
             }
 
-            var progressTracker = new ProgressTracker();
+            var comparator = new FileComparator(options.FirstFileName, options.SecondFileName) as IComparator;
 
-            var comparator = new FileComparator(options.FirstFileName, options.SecondFileName);
-            var compareTask = comparator.Compare(progressTracker);
-            WaitAndReport(compareTask, progressTracker);
+            comparator.Compare().Wait();
 
             var diff = new DiffReporter(comparator.GetMissingInFirst(), comparator.GetMissingInSecond());
-            var report = diff.Report();
+            var report = diff.ReducedReport();
 
             if (!string.IsNullOrEmpty(report))
             {
@@ -57,53 +53,6 @@ namespace LineCompare
                 }, e => e);
             Console.Error.WriteLine(helpText);
             return 1;
-        }
-
-        /// <summary>
-        /// Continuously prints progress to the console while task is running
-        /// </summary>
-        /// <param name="taskToWait">Awaited task</param>
-        /// <param name="progressToReport">Progress to display in the console</param>
-        private static void WaitAndReport(Task taskToWait, ProgressTracker progressToReport)
-        {
-            var checkDelay = 100;
-            var maxReports = Console.IsOutputRedirected ? 10 : 10000; // Don't spam to the output if it is not a console window
-            var prevProgress = 0.0f;
-
-            if (!Console.IsOutputRedirected)
-            {
-                Console.WriteLine();
-            }
-            
-            while (!taskToWait.IsCompleted)
-            {
-                var progress = progressToReport.Progress;
-                if (progress - prevProgress < 1.0f / maxReports)
-                {
-                    continue;
-                }
-                prevProgress = progress;
-
-                if (Console.IsOutputRedirected)
-                {
-                    Console.WriteLine($"Progress: {progress:P2}");
-                }
-                else
-                {
-                    Console.Write($"\rProgress: {progress:P2}");
-                }
-
-                Thread.Sleep(checkDelay);
-            }
-            
-            if (Console.IsOutputRedirected)
-            {
-                Console.WriteLine($"Progress: {1.0f:P2}");
-            }
-            else
-            {
-                Console.WriteLine($"\rProgress: {1.0f:P2}");
-            }
         }
     }
 }

@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using ShellProgressBar;
 
 namespace LineCompare.Comparators
 {
     /// <summary>
     /// Compares two files ignoring line order
     /// </summary>
-    public sealed class FileComparator : IComparator
+    public sealed class FileComparator : BaseComparator
     {
         [UsedImplicitly]
         public class Creator : IComparatorCreator
@@ -20,26 +21,15 @@ namespace LineCompare.Comparators
                 return new FileComparator(firstFile, secondFile);
             }
         }
-        
-        private readonly string _firstFilePath;
-        private readonly string _secondFilePath;
-        
-        private bool _comparisonStarted;
-        private bool _comparisonComplete;
 
-        private long _firstFileSize;
-        private long _secondFileSize;
-
-        private long _firstFilePosition;
-        private long _secondFilePosition;
-        
         private readonly Dictionary<string, int> _first = new();
         private readonly Dictionary<string, int> _second = new();
 
-        public FileComparator(string firstFilePath, string secondFilePath)
+        private readonly bool _fastLookup;
+        
+        public FileComparator(string firstFilePath, string secondFilePath, bool fastLookup = true) : base(firstFilePath, secondFilePath)
         {
-            _firstFilePath = firstFilePath;
-            _secondFilePath = secondFilePath;
+            _fastLookup = fastLookup;
         }
 
         private static void AddEntry(IDictionary<string, int> dictionary, string entry)
@@ -54,72 +44,79 @@ namespace LineCompare.Comparators
             }
         }
 
-        private void UpdateProgress(IProgress<float> progress)
+        protected override async Task Compare()
         {
-            var size = _firstFileSize + _secondFileSize;
-            if (size == 0)
+            using var overallProgressBar = new ProgressBar(_fastLookup ? 2 : 1, "Reading files", ProgressBarSettings.DefaultOptions);
+            
+            var firstFileBar = overallProgressBar.Spawn(1000, "First file reading", ProgressBarSettings.DefaultChildOptions);
+            var firstTask = Task.Run(() =>
             {
-                progress.Report(0);
-            }
-            else
+                var progress = firstFileBar.AsProgress<float>();
+                foreach (var line in FileUtils.ReadFileSequential(FirstFilePath, progress))
+                {
+                    AddEntry(_first, line);
+                }
+                firstFileBar.Dispose();
+            });
+
+            var secondFileBar = overallProgressBar.Spawn(1000, "Second file reading", ProgressBarSettings.DefaultChildOptions);
+            var secondTask = Task.Run(() =>
             {
-                progress.Report((float)(_firstFilePosition + _secondFilePosition) / size);
-            }
-        }
+                var progress = secondFileBar.AsProgress<float>();
+                foreach (var line in FileUtils.ReadFileSequential(SecondFilePath, progress))
+                {
+                    AddEntry(_second, line);
+                }
+                secondFileBar.Dispose();
 
-        public async Task Compare(IProgress<float> progress)
-        {
-            if (_comparisonStarted)
-            {
-                throw new Exception("File comparison already started");
-            }
-            _comparisonStarted = true;
-
-            var firstTask = Task.Run(
-                () => FileUtils.ReadFile(_firstFilePath, 
-                    fileSize => _firstFileSize = fileSize, 
-                    (line, filePosition) =>
-                    {
-                        AddEntry(_first, line);
-                        _firstFilePosition = filePosition;
-                        UpdateProgress(progress);
-                    }));
-
-            var secondTask = Task.Run(
-                () => FileUtils.ReadFile(_secondFilePath, 
-                    fileSize => _secondFileSize = fileSize, 
-                    (line, filePosition) =>
-                    {
-                        AddEntry(_second, line);
-                        _secondFilePosition = filePosition;
-                        UpdateProgress(progress);
-                    }));
+            });
 
             await Task.WhenAll(firstTask, secondTask);
+
+            if (_fastLookup)
+            {
+                overallProgressBar.Tick("Comparing files");
+                var compareBar = overallProgressBar.Spawn(_first.Count, "Comparing", ProgressBarSettings.DefaultChildOptions);
+
+                foreach (var (line, firstCount) in _first)
+                {
+                    if (_second.TryGetValue(line, out var secondCount))
+                    {
+                        var count = secondCount - firstCount;
+
+                        if (count == 0)
+                        {
+                            _second.Remove(line);
+                        }
+                        else
+                        {
+                            _second[line] = count;
+                        }
+                    }
+                    compareBar.Tick();
+                }
+            }
             
-            _comparisonComplete = true;
+            overallProgressBar.Tick("Completed");
         }
 
-        public IEnumerable<string> GetMissingInFirst()
+        private static IEnumerable<string> GetMissingInDictionary(IReadOnlyDictionary<string, int> dictionary, IReadOnlyDictionary<string, int> other)
         {
-            if (!_comparisonComplete)
-            {
-                throw new Exception("Files is not compared, unable to return difference");
-            }
-
-            return _second.SelectMany(pair => Enumerable.Repeat(pair.Key,
-                _first.TryGetValue(pair.Key, out var existing) ? Math.Max(0, pair.Value - existing) : pair.Value));
+            return other.SelectMany(pair => Enumerable.Repeat(pair.Key, dictionary.TryGetValue(pair.Key, out var existing) ? Math.Max(0, pair.Value - existing) : pair.Value));
         }
 
-        public IEnumerable<string> GetMissingInSecond()
+        protected override IEnumerable<string> GetMissingInFirst()
         {
-            if (!_comparisonComplete)
-            {
-                throw new Exception("Files is not compared, unable to return difference");
-            }
-            
-            return _first.SelectMany(pair => Enumerable.Repeat(pair.Key,
-                _second.TryGetValue(pair.Key, out var existing) ? Math.Max(0, pair.Value - existing) : pair.Value));
+            return _fastLookup
+                ? _second.SelectMany(pair => Enumerable.Repeat(pair.Key, pair.Value > 0 ? pair.Value : 0))
+                : GetMissingInDictionary(_first, _second);
+        }
+
+        protected override IEnumerable<string> GetMissingInSecond()
+        {
+            return _fastLookup
+                ? _second.SelectMany(pair => Enumerable.Repeat(pair.Key, pair.Value < 0 ? -pair.Value : 0))
+                : GetMissingInDictionary(_second, _first);
         }
     }
 }
