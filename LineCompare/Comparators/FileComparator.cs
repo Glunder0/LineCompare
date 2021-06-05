@@ -27,7 +27,7 @@ namespace LineCompare.Comparators
 
         private readonly bool _fastLookup;
         
-        public FileComparator(string firstFilePath, string secondFilePath, bool fastLookup = true) : base(firstFilePath, secondFilePath)
+        public FileComparator([NotNull] string firstFilePath, [NotNull] string secondFilePath, bool fastLookup = true) : base(firstFilePath, secondFilePath)
         {
             _fastLookup = fastLookup;
         }

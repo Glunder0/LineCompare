@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using CommandLine;
 using CommandLine.Text;
-using LineCompare.Comparators;
 
 namespace LineCompare
 {
@@ -24,7 +23,12 @@ namespace LineCompare
                 return 2;
             }
 
-            var comparator = new FileComparator(options.FirstFileName, options.SecondFileName) as IComparator;
+            var comparator = ComparatorLibrary.GetComparator(options.CompareMethod, options.FirstFileName, options.SecondFileName);
+
+            if (comparator == null)
+            {
+                throw new Exception($"Unknown compare method: {options.CompareMethod}");
+            }
 
             comparator.Compare().Wait();
 
